@@ -1,6 +1,9 @@
 package com.unfried.algasensors.device.management.api.controller;
 
+import com.unfried.algasensors.device.management.api.client.SensorMonitoringClient;
+import com.unfried.algasensors.device.management.api.model.SensorDetailOutput;
 import com.unfried.algasensors.device.management.api.model.SensorInput;
+import com.unfried.algasensors.device.management.api.model.SensorMonitoringOutput;
 import com.unfried.algasensors.device.management.api.model.SensorOutput;
 import com.unfried.algasensors.device.management.common.IdGenerator;
 import com.unfried.algasensors.device.management.domain.model.Sensor;
@@ -21,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class SensorController {
 
 	private final SensorRepository sensorRepository;
+	private final SensorMonitoringClient sensorMonitoringClient;
 
 	@GetMapping
 	public Page<SensorOutput> search(@PageableDefault Pageable pageable) {
@@ -34,6 +38,20 @@ public class SensorController {
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
 		return convertToModel(sensor);
+	}
+
+	@GetMapping("{sensorId}/detail")
+	public SensorDetailOutput getOneWithDetail(@PathVariable TSID sensorId) {
+		Sensor sensor = sensorRepository.findById(new SensorId(sensorId))
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+		SensorMonitoringOutput monitoringOutput = sensorMonitoringClient.getDetail(sensorId);
+		SensorOutput sensorOutput = convertToModel(sensor);
+
+		return SensorDetailOutput.builder()
+				.sensor(sensorOutput)
+				.monitoring(monitoringOutput)
+				.build();
 	}
 
 	@PostMapping
@@ -77,6 +95,8 @@ public class SensorController {
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
 		sensorRepository.delete(sensor);
+
+		sensorMonitoringClient.disableMonitoring(sensorId);
 	}
 
 	@ResponseStatus(HttpStatus.NO_CONTENT)
@@ -87,6 +107,7 @@ public class SensorController {
 		sensor.setEnabled(true);
 
 		sensorRepository.save(sensor);
+		sensorMonitoringClient.enableMonitoring(sensorId);
 	}
 
 	@ResponseStatus(HttpStatus.NO_CONTENT)
@@ -97,6 +118,7 @@ public class SensorController {
 		sensor.setEnabled(false);
 
 		sensorRepository.save(sensor);
+		sensorMonitoringClient.disableMonitoring(sensorId);
 	}
 
 	private SensorOutput convertToModel(Sensor sensor) {
